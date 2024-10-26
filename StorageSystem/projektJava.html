@@ -1,0 +1,106 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
+  <meta name="language" content="pl"/>
+  <title>Programowanie Współbieżne 2023/24: Duże zadanie zaliczeniowe (Java)</title>
+  <meta name="author" content="Konrad Iwanicki"/>
+  <meta name="keywords" content="Programowanie Współbieżne, Java, Zadanie Zaliczeniowe"/>
+  <link href="assignment.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+  <div class="main">
+
+<h5>Programowanie Współbieżne 2023/2024</h5>
+
+<h6>Zadanie zaliczeniowe ze współbieżności w języku Java</h6>
+
+<p>Systemy składowania danych (ang. <em>storage systems</em>) muszą jednocześnie spełniać wiele wymagań dotyczących w szczególności wydajności operacji dostępu do danych, wykorzystania pojemności nośników danych oraz odporności na awarie urządzeń będących tymi nośnikami. W tym celu często przenoszą fragmenty danych pomiędzy poszczególnymi urządzeniami. Twoim zadaniem będzie implementacja w języku Java mechanizmów koordynujących współbieżne operacje takiego przenoszenia zgodnie z poniższymi wymaganiami. Do implementacji rozwiązania należy wykorzystać <a href="ab123456.zip">załączony szablon</a>.</p>
+<h1 id="specyfikacja">Specyfikacja</h1>
+<p>W naszym modelu systemu dane są grupowane w komponenty i w takich jednostkach przechowywane na urządzeniach. Zarówno każde urządzenie jak i każdy komponent danych mają przypisany niezmienny i unikalny w ramach systemu identyfikator (obiekt klasy odpowiednio <code>cp2023.base.DeviceId</code> oraz <code>cp2023.base.ComponentId</code>). Każde urządzenie ma ponadto określoną pojemność, to jest maksymalną liczbę komponentów, które może przechowywać w dowolnym momencie. Przypisaniem komponentów do urządzeń zarządza system (obiekt implementujący interfejs <code>cp2023.base.StorageSystem</code>, przedstawiony poniżej):</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode java"><code class="sourceCode java"><a class="sourceLine" id="cb1-1" title="1"><span class="kw">public</span> <span class="kw">interface</span> StorageSystem {</a>
+<a class="sourceLine" id="cb1-2" title="2"></a>
+<a class="sourceLine" id="cb1-3" title="3">    <span class="dt">void</span> <span class="fu">execute</span>(ComponentTransfer transfer) <span class="kw">throws</span> TransferException;</a>
+<a class="sourceLine" id="cb1-4" title="4">    </a>
+<a class="sourceLine" id="cb1-5" title="5">}</a></code></pre></div>
+<p>Dokładniej, każdy istniejący w systemie komponent znajduje się na dokładnie jednym urządzeniu, chyba że użytkownik systemu zlecił transfer tego komponentu na inne urządzenie (wołając metodę <code>execute</code> ww. klasy <code>StorageSystem</code> i przekazując jej jako parametr obiekt implementujący interfejs <code>cp2023.base.ComponentTransfer</code> reprezentujący zlecany transfer).</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode java"><code class="sourceCode java"><a class="sourceLine" id="cb2-1" title="1"><span class="kw">public</span> <span class="kw">interface</span> ComponentTransfer {</a>
+<a class="sourceLine" id="cb2-2" title="2"></a>
+<a class="sourceLine" id="cb2-3" title="3">    <span class="kw">public</span> ComponentId <span class="fu">getComponentId</span>();</a>
+<a class="sourceLine" id="cb2-4" title="4">    </a>
+<a class="sourceLine" id="cb2-5" title="5">    <span class="kw">public</span> DeviceId <span class="fu">getSourceDeviceId</span>();</a>
+<a class="sourceLine" id="cb2-6" title="6">    </a>
+<a class="sourceLine" id="cb2-7" title="7">    <span class="kw">public</span> DeviceId <span class="fu">getDestinationDeviceId</span>();</a>
+<a class="sourceLine" id="cb2-8" title="8">    </a>
+<a class="sourceLine" id="cb2-9" title="9">    <span class="kw">public</span> <span class="dt">void</span> <span class="fu">prepare</span>();</a>
+<a class="sourceLine" id="cb2-10" title="10">    </a>
+<a class="sourceLine" id="cb2-11" title="11">    <span class="kw">public</span> <span class="dt">void</span> <span class="fu">perform</span>();</a>
+<a class="sourceLine" id="cb2-12" title="12"></a>
+<a class="sourceLine" id="cb2-13" title="13">}</a></code></pre></div>
+<p>Transfer komponentu jest zlecany także, gdy użytkownik chce dodać nowy komponent do systemu (w takim przypadku metoda <code>getSourceDeviceId</code> obiektu transferu zwraca wartość <code>null</code>) lub usunąć istniejący komponent z systemu (w takim przypadku, symetrycznie, metoda <code>getDestinationDeviceId</code> obiektu transferu zwraca wartość <code>null</code>). Innymi słowy, pojedynczy transfer reprezentuje jedną z trzech dostępnych operacji na komponencie:</p>
+<ul>
+<li><em>dodanie</em> nowego komponentu na urządzenie systemu (<code>getSourceDeviceId</code> obiektu transferu zwraca <code>null</code> a <code>getDestinationDeviceId</code> nie-<code>null</code> oznaczający identyfikator urządzenia, na którym ma znaleźć się dodawany komponent),</li>
+<li><em>przeniesienie</em> istniejącego komponentu pomiędzy urządzeniami systemu (<code>getSourceDeviceId</code> oraz <code>getDestinationDeviceId</code> obie zwracają nie-<code>null</code>-e reprezentujące identyfikatory odpowiednio aktualnego urządzenia, na którym znajduje się komponent, oraz docelowego urządzenia, na którym komponent powinien się znaleźć po transferze),</li>
+<li><em>usunięcie</em> istniejącego komponentu z urządzenia a tym samym – systemu (<code>getSourceDeviceId</code> zwraca nie-<code>null</code> oznaczający identyfikator urządzenia, na którym znajduje się komponent, a <code>getDestinationDeviceId</code> zwraca <code>null</code>).</li>
+</ul>
+<p>Zlecanie trzech ww. typów operacji przez użytkownika jest poza kontrolą implementowanego rozwiązania. Zadaniem Twojego rozwiązania jest natomiast przeprowadzanie zlecanych transferów w sposób synchroniczny (tj. jeśli zlecany transfer jest poprawny, metoda <code>execute</code> wywołana na obiekcie implementującym <code>StorageSystem</code> z transferem reprezentowanym jako parametr implementujący interfejs <code>ComponentTransfer</code> nie może zakończyć swojego działania dopóki ten transfer się nie zakończy). Jako że wiele różnych operacji może być zlecanych jednocześnie przez użytkownika, implementowany przez Ciebie system musi zapewnić ich koordynację według następujących reguł.</p>
+<p>W dowolnym momencie dla danego komponentu może być zgłoszony co najwyżej jeden transfer. Dopóki ten transfer się nie zakończy, komponent nazwiemy <em>transferowanym</em> zaś każdy kolejny transfer zgłaszany dla tego komponentu należy traktować jako niepoprawny.</p>
+<p>Sam transfer komponentu jest dwuetapowy i może trwać dłuższy czas (zwłaszcza jego drugi etap). Rozpoczęcie transferu polega na jego przygotowaniu (tj. wywołaniu metody <code>prepare</code> na obiekcie o interfejsie <code>ComponentTransfer</code> reprezentującym transfer). Dopiero po takim przygotowaniu mogą być przesyłane dane stanowiące komponent (co odbywa się poprzez wywołanie metody <code>perform</code> dla ww. obiektu). Gdy dane zostaną przesłane (tj. metoda <code>perform</code> zakończy swoje działanie), transfer się kończy. Obie ww. metody muszą być wykonane w kontekście wątku zlecającego transfer.</p>
+<h2 id="bezpieczeństwo">Bezpieczeństwo</h2>
+<p>Transfer może być poprawny albo niepoprawny. Poniższe wymagania bezpieczeństwa dotyczą transferów poprawnych. Obsługa transferów niepoprawnych jest z kolei opisana w dalszej sekcji.</p>
+<p>Jeśli transfer reprezentuje operację usunięcia komponentu, jego rozpoczęcie jest <em>dozwolone</em> bez żadnych dodatkowych warunków wstępnych. W przeciwnym przypadku, rozpoczęcie transferu jest dozwolone o ile na urządzeniu docelowym jest miejsce na transferowany komponent, w szczególności miejsce to właśnie jest lub będzie zwalniane, więc można je dzięki temu zarezerwować. Dokładniej, rozpoczęcie transferu reprezentującego przesunięcie lub dodanie komponentu <em>Cx</em> jest <em>dozwolone</em>, jeśli zachodzi któryś z poniższych warunków:</p>
+<ul>
+<li>Na urządzeniu docelowym transferu jest wolne miejsce na komponent, które nie zostało zarezerwowane przez system na inny komponent, który jest/będzie przenoszony/dodawany na to urządzenie.</li>
+<li>Na urządzeniu docelowym znajduje się komponent <em>Cy</em> transferowany z tego urządzenia, którego transfer się rozpoczął lub jego rozpoczęcie jest dozwolone, oraz miejsce zwalniane przez ten komponent nie zostało zarezerwowane przez system na inny komponent.</li>
+<li>Komponent <em>Cx</em> należy do pewnego zbioru transferowanych komponentów takiego, że urządzeniem docelowym każdego komponentu ze zbioru jest urządzenie, na którym znajduje się dokładnie jeden inny komponent ze zbioru, oraz miejsce żadnego z komponentów ze zbioru nie zostało zarezerwowane na komponent spoza zbioru.</li>
+</ul>
+<p>Jeśli transfer komponentu <em>Cx</em> jest dozwolony, ale odbywać się ma w miejsce jeszcze zajmowane przez inny transferowany komponent <em>Cy</em> (dwa ostatnie przypadki powyżej), to drugi etap transferu komponentu <em>Cx</em> (tj. wywołanie funkcji <code>perform</code> dla tego transferu) nie może rozpocząć się przed zakończeniem pierwszego etapu transferu komponentu <em>Cy</em> (tj. wywołaniem funkcji <code>prepare</code> dla tego transferu).</p>
+<p>Oczywiście, jeśli transfer komponentu jest niedozwolony, to nie może on być rozpoczęty (tj. ani funkcja <code>prepare</code>, ani funkcja <code>perform</code> nie mogą zostać wywołane na obiekcie reprezentującym ten transfer).</p>
+<p>Twoje rozwiązanie powinno bezwzględnie zapewniać wszystkie powyższe warunki bezpieczeństwa.</p>
+<h2 id="żywotność">Żywotność</h2>
+<p>Jeśli natomiast chodzi o żywotność, to transfer (zarówno jego faza <code>prepare</code> jak i <code>perform</code>) powinien się rozpoczynać tak szybko, jak tylko jest on dozwolony i pozostałe wymagania bezpieczeństwa zostaną spełnione. W przypadku, gdy kilka transferów konkuruje o miejsce na urządzeniu, spomiędzy tych z nich, które są dozwolone, Twój algorytm powinien lokalnie priorytetyzować transfery czekające dłużej na to urządzenie. Globalnie może to potencjalnie prowadzić do zagłodzenia pewnych transferów (zachęcamy do wymyślenia scenariusza takiej sytuacji). Rozwiązanie tego problemu jest oczywiście możliwe do implementacji, ale komplikuje kod ponad to, co chcielibyśmy od Państwa wymagać. Nie należy go więc implementować, zwłaszcza że w praktyce użytkownik systemu widząc, że transfer na jakieś urządzenie długo nie może się wykonać, mógłby wytransferować inne komponenty z tego urządzenia.</p>
+<h2 id="obsługa-błędów">Obsługa błędów</h2>
+<p>Wreszcie, zaproponowane rozwiązanie powinno sprawdzać, czy zlecony przez użytkownika transfer jest niepoprawny (co powinno skutkować podniesieniem przez metodę <code>execute</code> interfejsu <code>StorageSystem</code> odpowiedniego wyjątku dziedziczącego po klasie <code>cp2023.exceptions.TransferException</code>). Zgodnie z wcześniejszymi wyjaśnieniami transfer jest niepoprawny, jeśli zachodzi co najmniej jeden z poniższych warunków:</p>
+<ul>
+<li>transfer nie reprezentuje żadnej z trzech dostępnych operacji na komponentach lub nie wskazuje żadnego komponentu (wyjątek <code>IllegalTransferType</code>);</li>
+<li>urządzenie wskazane przez transfer jako źródłowe lub docelowe nie istnieje w systemie (wyjątek <code>DeviceDoesNotExist</code>);</li>
+<li>komponent o identyfikatorze równym dodawanemu w ramach transferu komponentowi już istnieje w systemie (wyjątek <code>ComponentAlreadyExists</code>);</li>
+<li>komponent o identyfikatorze równym usuwanemu lub przesuwanemu w ramach transferu komponentowi nie istnieje w systemie lub znajduje się na innym urządzeniu niż wskazane przez transfer (wyjątek <code>ComponentDoesNotExist</code>);</li>
+<li>komponent, którego dotyczy transfer, znajduje się już na urządzeniu wskazanym przez transfer jako docelowe (wyjątek <code>ComponentDoesNotNeedTransfer</code>);</li>
+<li>komponent, którego dotyczy transfer, jest jeszcze transferowany (wyjątek <code>ComponentIsBeingOperatedOn</code>).</li>
+</ul>
+<p>W rozwiązaniu można przyjąć dowolną sensowną kolejność sprawdzania tych warunków.</p>
+<h1 id="wymagania">Wymagania</h1>
+<p>Twoim zadaniem jest zaimplementowanie systemu według powyższej specyfikacji i dostarczonego szablonu przy wykorzystaniu mechanizmów współbieżności języka Java 17. Twój kod źródłowy powinien być napisany w zgodzie z dobrymi praktykami programistycznymi. Rozwiązania oparte na aktywnym lub półaktywnym (np. <code>sleep</code>, <code>yield</code> lub inne metody wykorzystujące ograniczenia czasowe) oczekiwaniu nie otrzymają żadnych punktów.</p>
+<p>Dla uproszczenia rozwiązań zakładamy, że wątki zgłaszające transfery nie są nigdy przerywane (tj. nigdy nie jest wołana dla nich metoda <code>interrupt</code> klasy <code>Thread</code>). Reakcją na pojawienie się kontrolowanego wyjątku wynikającego z takiego przerwania (np. <code>InterruptedException</code> lub <code>BrokenBarrierException</code>) powinno być podniesienie wyjątku niekontrolowanego w następujący sposób: <code>throw new RuntimeException("panic: unexpected thread interruption");</code>.</p>
+<p>Szczegółowe dalsze wymagania formalne są następujące.</p>
+<ol type="1">
+<li>Nie możesz w żaden sposób zmieniać zawartości pakietów <code>cp2023.base</code>, <code>cp2023.demo</code> oraz <code>cp2023.exceptions</code>.</li>
+<li>Klasy implementujące rozwiązanie możesz dodawać jedynie w pakiecie <code>cp2023.solution</code>, ale nie możesz tworzyć w tym pakiecie żadnych podpakietów.</li>
+<li>Twoja implementacja nie może tworzyć żadnych wątków.</li>
+<li>Twoja implementacja nie powinna wypisywać niczego na standardowe wyjście (<code>System.out</code>) i standardowe wyjście diagnostyczne (<code>System.err</code>).</li>
+<li>W klasie <code>cp2023.solution.StorageSystemFactory</code> musisz dodać treść metody <code>newSystem</code>, która będzie wykorzystywana do instancjonowania zaimplementowanego przez Ciebie systemu. Każde wywołanie tej metody powinno tworzyć nowy obiekt systemu. Wiele obiektów systemu powinno być w stanie działać w tym samym czasie. Nie wolno natomiast w żaden sposób zmieniać sygnatury tej metody ani nazwy klasy czy jej lokalizacji. Jeśli konfiguracja systemu dostarczona jako argumenty tej metody jest niepoprawna (np. jakiś komponent jest przypisany do urządzenia bez podanej pojemności lub liczba komponentów przypisanych do jakiegoś urządzenia przekracza jego pojemność), to metoda powinna podnieść wyjątek <code>java.lang.IllegalArgumentException</code> z odpowiednim komunikatem tekstowym.</li>
+<li>Możesz stworzyć sobie własne pakiety do testów, np. <code>cp2023.tests</code>, ale te pakiety będą ignorowane przy testowaniu przez nas, więc w szczególności kod Twojego systemu nie może od nich zależeć.</li>
+<li>W plikach źródłowych Javy nie możesz używać nieanglojęzycznych znaków (w szczególności polskich znaków).</li>
+<li>Twoje rozwiązanie powinno składać się z jednego pliku <code>ab123456.zip</code>, gdzie <code>ab123456</code> należy zastąpić swoim loginem z maszyny <code>students.mimuw.edu.pl</code> (będącym zwykle konkatenacją inicjałów i numeru indeksu). Plik ten musi mieć taką samą strukturę, jak szablon, to jest musi zawierać jedynie katalog <code>cp2023</code> reprezentujący pakiet o tej samej nazwie, który zawiera katalogi odpowiednich podpakietów, co najmniej <code>base</code>, <code>demo</code>, <code>exceptions</code> i <code>solution</code>, które z kolei zawierają odpowiednie pliki źródłowe (<code>*.java</code>).</li>
+<li>Twoje rozwiązanie musi kompilować się na maszynie <code>students.mimuw.edu.pl</code> poleceniem <code>javac cp2023/base/*.java cp2023/exceptions/*.java cp2023/solution/*.java cp2023/demo/*.java</code>.</li>
+<li>W Twoim rozwiązaniu musi działać program demonstracyjny, wywoływany poleceniem <code>java cp2023.demo.TransferBurst</code>, to jest nie może on zgłaszać żadnych wyjątków.</li>
+</ol>
+<p><strong>Rozwiązania niespełniające któregokolwiek z powyższych wymagań nie będą sprawdzane i automatycznie dostaną 0 punktów.</strong></p>
+<p>Prosimy o zrozumienie! Będziemy mieli do sprawdzenia nawet ponad 160 rozwiązań. Rozwiązania te będą w pierwszej fazie testowane automatycznie. Gdybyśmy musieli każde rozwiązanie w jakikolwiek sposób poprawiać, aby uruchomienie testów było możliwe, stracilibyśmy niepotrzebnie mnóstwo czasu. Dlatego też zapewnienie zgodności z powyższymi wymaganiami jest po Państwa stronie.</p>
+<p>Aby w tym celu dać Państwu więcej informacji co do samej procedury testowania, to dla każdego rozwiązania przebiegać będzie ona z grubsza następująco.</p>
+<ol type="1">
+<li>Archiwum <code>ZIP</code> z rozwiązaniem zostanie rozpakowane do dedykowanego katalogu głównego na maszynie <code>students</code> (lub kompatybilnej jeśli chodzi o wersję Javy).</li>
+<li>Z katalogu tego zostaną usunięte wszystkie pliki i podkatalogi za wyjątkiem podkatalogu <code>cp2023/solution</code> i jego zawartości.</li>
+<li>Z podkatalogu <code>cp2023/solution</code> zostaną usunięte wszystkie pliki (i podkatalogi) za wyjątkiem plików <code>*.java</code>.</li>
+<li>Do katalogu głównego zostaną skopiowane katalogi <code>cp2023/base</code>, <code>cp2023/demo</code> oraz <code>cp2023/exceptions</code> z dostarczanego szablonu, aby pliki z interfejsami oraz aplikacja demonstracyjna były w wersji oryginalnej, oraz katalogi z kodem naszych testów.</li>
+<li>Wszystko zostanie skompilowane.</li>
+<li>Uruchomiona zostanie aplikacja demonstracyjna, aby sprawdzić, czy działa.</li>
+<li>Jeśli rozpakowanie archiwum, kompilacja lub uruchomienie aplikacji demonstracyjnej się nie powiedzie, to rozwiązanie otrzymuje automatycznie 0 punktów. W przeciwnym przypadku, w ramach testowania, uruchamiane będą kolejne aplikacje testowe oraz ewentualne dodatkowe programy (np. weryfikacja anty-plagiatowa).</li>
+</ol>
+<p>Wszelkie pytania i uwagi powinny być kierowane do <a href="https://www.mimuw.edu.pl/~iwanicki/">Konrada Iwanickiego</a> poprzez forum Moodle dedykowane zadaniu. Przed wysłaniem pytania, proszę sprawdzić na forum, czy ktoś wcześniej nie zadał podobnego.</p>
+<p><em>Powodzenia!</em></p>
+</div>
+</body>
+</html>
+
